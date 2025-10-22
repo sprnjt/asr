@@ -111,20 +111,31 @@ class SarvamBatchTranscriber:
                 
                 print(f"[Parser] JSON keys: {data.keys()}")
                 
-                segment_data = None
+                # Check for diarized transcript first (Sarvam format)
+                if 'diarized_transcript' in data and 'entries' in data['diarized_transcript']:
+                    print("[Parser] Found diarized_transcript.entries")
+                    segment_data = data['diarized_transcript']['entries']
+                    
+                    for seg in segment_data:
+                        start = seg.get('start_time_seconds', 0.0)
+                        end = seg.get('end_time_seconds', 0.0)
+                        text = seg.get('transcript', '')
+                        speaker = seg.get('speaker_id', 'SPEAKER_00')
+                        
+                        segments.append({
+                            'start_ts': float(start),
+                            'end_ts': float(end),
+                            'transcript': text,
+                            'speaker': speaker
+                        })
+                        
+                        if len(segments) == 1:
+                            print(f"[Parser] First segment: start={start}, end={end}, speaker={speaker}")
                 
-                if 'segments' in data:
+                # Fallback to other formats
+                elif 'segments' in data:
                     segment_data = data['segments']
-                elif 'results' in data and isinstance(data['results'], list):
-                    for result in data['results']:
-                        if 'segments' in result:
-                            segment_data = result['segments']
-                            break
-                elif 'data' in data and 'segments' in data['data']:
-                    segment_data = data['data']['segments']
-                
-                if segment_data:
-                    print(f"[Parser] Found {len(segment_data)} segments")
+                    print(f"[Parser] Found {len(segment_data)} segments in 'segments' field")
                     for seg in segment_data:
                         start = seg.get('start', seg.get('start_time', seg.get('start_ts', 0.0)))
                         end = seg.get('end', seg.get('end_time', seg.get('end_ts', 0.0)))
@@ -137,10 +148,43 @@ class SarvamBatchTranscriber:
                             'transcript': text,
                             'speaker': speaker
                         })
-                        
-                        if len(segments) == 1:
-                            print(f"[Parser] First segment: start={start}, end={end}, speaker={speaker}")
                 
+                elif 'results' in data and isinstance(data['results'], list):
+                    for result in data['results']:
+                        if 'segments' in result:
+                            segment_data = result['segments']
+                            print(f"[Parser] Found {len(segment_data)} segments in 'results.segments'")
+                            for seg in segment_data:
+                                start = seg.get('start', seg.get('start_time', seg.get('start_ts', 0.0)))
+                                end = seg.get('end', seg.get('end_time', seg.get('end_ts', 0.0)))
+                                text = seg.get('text', seg.get('transcript', ''))
+                                speaker = seg.get('speaker', seg.get('speaker_id', seg.get('speaker_label', 'SPEAKER_00')))
+                                
+                                segments.append({
+                                    'start_ts': float(start),
+                                    'end_ts': float(end),
+                                    'transcript': text,
+                                    'speaker': speaker
+                                })
+                            break
+                
+                elif 'data' in data and 'segments' in data['data']:
+                    segment_data = data['data']['segments']
+                    print(f"[Parser] Found {len(segment_data)} segments in 'data.segments'")
+                    for seg in segment_data:
+                        start = seg.get('start', seg.get('start_time', seg.get('start_ts', 0.0)))
+                        end = seg.get('end', seg.get('end_time', seg.get('end_ts', 0.0)))
+                        text = seg.get('text', seg.get('transcript', ''))
+                        speaker = seg.get('speaker', seg.get('speaker_id', seg.get('speaker_label', 'SPEAKER_00')))
+                        
+                        segments.append({
+                            'start_ts': float(start),
+                            'end_ts': float(end),
+                            'transcript': text,
+                            'speaker': speaker
+                        })
+                
+                # Final fallback to single transcript
                 elif 'transcript' in data:
                     print("[Parser] Fallback: Using single transcript")
                     segments.append({
